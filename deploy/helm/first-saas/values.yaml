@@ -1,0 +1,31 @@
+replicaCount: 2
+
+image:
+  repository: first-saas   # overridden by Jenkins with the ECR repository
+  tag: latest              # overridden by Jenkins with the git sha
+  pullPolicy: IfNotPresent
+
+env:
+  JAVA_TOOL_OPTIONS: "-XX:+ExitOnOutOfMemoryError"
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+
+service:
+  port: 80
+
+# Requires the AWS Load Balancer Controller on the cluster (see "Mise en place AWS" in the README)
+ingress:
+  enabled: false
+  host: ""
+  certificateArn: ""
