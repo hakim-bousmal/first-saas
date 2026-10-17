@@ -1,0 +1,16 @@
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 768Mi
+  limits:
+    memory: 768Mi
+
+ingress:
+  enabled: false        # TODO: true once DNS + ACM certificate exist
+  host: api.example.com
+  certificateArn: ""

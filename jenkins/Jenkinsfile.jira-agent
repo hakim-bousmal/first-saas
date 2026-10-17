@@ -1,0 +1,75 @@
+// Jira -> Claude Code pipeline (simple Pipeline job pointing at this file on main).
+// Every 30 min: find validated Jira features, let Claude Code implement each one and open a PR.
+// The PR then goes through the normal Jenkinsfile pipeline + human review. Nothing is merged automatically.
+//
+// Credentials:
+//   anthropic-api-key  (Secret text)
+//   jira-api           (Username with password: Jira email / API token)
+//   github-bot         (Secret text: fine-grained PAT, contents:write + pull_requests:write on this repo only)
+
+pipeline {
+	agent {
+		dockerfile {
+			dir 'jenkins/claude-agent'
+			label 'docker'
+		}
+	}
+
+	triggers { cron('H/30 7-20 * * 1-5') }
+
+	options {
+		timestamps()
+		disableConcurrentBuilds()
+		buildDiscarder(logRotator(numToKeepStr: '50'))
+		timeout(time: 3, unit: 'HOURS')
+	}
+
+	environment {
+		JIRA_BASE_URL      = 'https://your-company.atlassian.net'   // TODO
+		JIRA_PROJECT       = 'SAAS'                                  // TODO
+		JIRA_READY_STATUS  = 'Validated'
+		JIRA_REVIEW_STATUS = 'In Review'
+		CLAUDE_MODEL       = 'claude-sonnet-5-5'
+		// Claude Code keeps its state in $HOME; keep it inside the workspace
+		HOME               = "${WORKSPACE}/.home"
+		ANTHROPIC_API_KEY  = credentials('anthropic-api-key')
+		GH_TOKEN           = credentials('github-bot')
+		JIRA               = credentials('jira-api')
+	}
+
+	stages {
+		stage('Setup') {
+			steps {
+				sh '''
+					mkdir -p "$HOME"
+					git config --global user.name  "claude-agent"
+					git config --global user.email "claude-agent@users.noreply.github.com"
+					gh auth setup-git
+					git fetch origin main
+					git checkout -B main origin/main
+					claude --version
+				'''
+			}
+		}
+
+		stage('Implement validated features') {
+			steps {
+				script {
+					int rc = sh(returnStatus: true, script: '''
+						export JIRA_USER="$JIRA_USR" JIRA_API_TOKEN="$JIRA_PSW"
+						scripts/scan-jira.sh
+					''')
+					if (rc != 0) {
+						unstable('At least one ticket could not be implemented, see logs/*.json')
+					}
+				}
+			}
+		}
+	}
+
+	post {
+		always {
+			archiveArtifacts artifacts: 'logs/*.json', allowEmptyArchive: true
+		}
+	}
+}

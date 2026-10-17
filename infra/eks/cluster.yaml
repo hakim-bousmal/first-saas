@@ -1,0 +1,31 @@
+# Bootstrap EKS cluster with eksctl:  eksctl create cluster -f infra/eks/cluster.yaml
+# (Good for learning; move to Terraform once the setup stabilises.)
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: first-saas
+  region: eu-west-3
+  # version omitted: eksctl picks its current default Kubernetes version
+
+iam:
+  withOIDC: true
+
+addonsConfig:
+  autoApplyPodIdentityAssociations: true
+
+addons:
+  - name: vpc-cni
+  - name: coredns
+  - name: kube-proxy
+  - name: eks-pod-identity-agent
+  - name: metrics-server   # needed by the HorizontalPodAutoscaler
+
+managedNodeGroups:
+  - name: default
+    instanceType: t3.medium
+    minSize: 2
+    desiredCapacity: 2
+    maxSize: 4
+    volumeSize: 30
+    privateNetworking: true
